@@ -188,3 +188,77 @@ connectors:
 		t.Errorf("BearerToken = %q, want value resolved from PROM_TOKEN", cfg.Connectors[0].BearerToken)
 	}
 }
+
+func TestMaxResultBytesDefaultsAndLoadsFromYAML(t *testing.T) {
+	cfg, err := Load(writeFile(t, validYAML), noEnv)
+	if err != nil {
+		t.Fatalf("Load = %v", err)
+	}
+	if cfg.Guardrails.MaxResultBytes != DefaultMaxResultBytes {
+		t.Errorf("MaxResultBytes default = %d, want %d", cfg.Guardrails.MaxResultBytes, DefaultMaxResultBytes)
+	}
+
+	cfg, err = Load(writeFile(t, `
+connectors:
+  - name: p
+    type: prometheus
+    url: http://localhost:9090
+guardrails:
+  max_result_bytes: 262144
+`), noEnv)
+	if err != nil {
+		t.Fatalf("Load = %v", err)
+	}
+	if cfg.Guardrails.MaxResultBytes != 262144 {
+		t.Errorf("MaxResultBytes = %d, want 262144", cfg.Guardrails.MaxResultBytes)
+	}
+}
+
+func TestMaxResultBytesRejectsNonPositive(t *testing.T) {
+	_, err := Load(writeFile(t, `
+connectors:
+  - name: p
+    type: prometheus
+    url: http://localhost:9090
+guardrails:
+  max_result_bytes: 0
+`), noEnv)
+	if err == nil {
+		t.Fatal("Load(max_result_bytes: 0) = nil error")
+	}
+	if !strings.Contains(err.Error(), "max_result_bytes") {
+		t.Errorf("error %q does not name the field", err)
+	}
+}
+
+func TestMaxResultBytesEnvOverrideWins(t *testing.T) {
+	getenv := func(key string) string {
+		if key == "MARSAD_GUARDRAILS_MAX_RESULT_BYTES" {
+			return "4096"
+		}
+		return ""
+	}
+	cfg, err := Load(writeFile(t, validYAML), getenv)
+	if err != nil {
+		t.Fatalf("Load = %v", err)
+	}
+	if cfg.Guardrails.MaxResultBytes != 4096 {
+		t.Errorf("MaxResultBytes = %d, env override did not win", cfg.Guardrails.MaxResultBytes)
+	}
+}
+
+func TestMaxResultBytesEnvOverrideRejectsGarbage(t *testing.T) {
+	getenv := func(key string) string {
+		if key == "MARSAD_GUARDRAILS_MAX_RESULT_BYTES" {
+			return "lots"
+		}
+		return ""
+	}
+	_, err := Load(writeFile(t, validYAML), getenv)
+	if err == nil {
+		t.Fatal("Load(env override garbage) = nil error")
+	}
+	if !strings.Contains(err.Error(), "MARSAD_GUARDRAILS_MAX_RESULT_BYTES") {
+		t.Errorf("error %q does not name the env var", err)
+	}
+}

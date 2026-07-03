@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/marsad-io/marsad/internal/connector"
 	"github.com/marsad-io/marsad/internal/schema"
@@ -24,6 +25,7 @@ type Executor func(ctx context.Context, call connector.ToolCall) (connector.Tool
 // Options configures the pipeline.
 type Options struct {
 	MaxTimeRange     time.Duration
+	MaxResultBytes   int // result size budget per call; <= 0 disables truncation
 	AuditSink        io.Writer
 	IncludeArguments bool
 }
@@ -55,8 +57,43 @@ func (p *Pipeline) Execute(ctx context.Context, call connector.ToolCall) (connec
 		p.audit(call, connectorName, "error", err, 0, p.now().Sub(start))
 		return connector.ToolResult{}, err
 	}
-	p.audit(call, connectorName, "ok", nil, resultSize(res), p.now().Sub(start))
+
+	res, totalBytes := p.enforceResultBudget(res)
+	p.auditSized(call, connectorName, "ok", nil, resultSize(res), totalBytes, p.now().Sub(start))
 	return res, nil
+}
+
+// enforceResultBudget truncates a result whose JSON serialization exceeds the
+// configured byte budget. The truncated result carries an explicit marker and
+// the total size, so agents know it is partial and how much more exists.
+// It returns the (possibly replaced) result and the pre-truncation total when
+// truncation happened, or 0 when the result fit the budget.
+func (p *Pipeline) enforceResultBudget(res connector.ToolResult) (connector.ToolResult, int) {
+	budget := p.opts.MaxResultBytes
+	if budget <= 0 {
+		return res, 0
+	}
+	full, err := json.Marshal(res.Content)
+	if err != nil || len(full) <= budget {
+		return res, 0
+	}
+
+	partial := full[:budget]
+	// Never cut a UTF-8 rune in half; back off to the last valid boundary.
+	for len(partial) > 0 && !utf8.Valid(partial) {
+		partial = partial[:len(partial)-1]
+	}
+
+	total := len(full)
+	return connector.ToolResult{Content: map[string]any{
+		"truncated":      true,
+		"total_bytes":    total,
+		"returned_bytes": len(partial),
+		"notice": fmt.Sprintf(
+			"result truncated by the max_result_bytes guardrail: returning %d of %d bytes; narrow the time range or lower the limit for a complete result",
+			len(partial), total),
+		"partial": string(partial),
+	}}, total
 }
 
 // check runs the guard chain. Adding a guardrail means adding a function here.
@@ -125,11 +162,16 @@ type auditLine struct {
 	DurationMS int64          `json:"duration_ms"`
 	Outcome    string         `json:"outcome"`
 	Bytes      int            `json:"bytes"`
+	TotalBytes int            `json:"total_bytes,omitempty"` // pre-truncation size, set only when truncated
 	Error      string         `json:"error,omitempty"`
 	Args       map[string]any `json:"args,omitempty"`
 }
 
 func (p *Pipeline) audit(call connector.ToolCall, connectorName, outcome string, callErr error, size int, d time.Duration) {
+	p.auditSized(call, connectorName, outcome, callErr, size, 0, d)
+}
+
+func (p *Pipeline) auditSized(call connector.ToolCall, connectorName, outcome string, callErr error, size, totalBytes int, d time.Duration) {
 	if p.opts.AuditSink == nil {
 		return
 	}
@@ -141,6 +183,7 @@ func (p *Pipeline) audit(call connector.ToolCall, connectorName, outcome string,
 		DurationMS: d.Milliseconds(),
 		Outcome:    outcome,
 		Bytes:      size,
+		TotalBytes: totalBytes,
 	}
 	if callErr != nil {
 		line.Error = callErr.Error()

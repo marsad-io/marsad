@@ -222,3 +222,74 @@ func TestInvalidArgumentsRejectedBeforeExecution(t *testing.T) {
 		t.Errorf("audit lines = %v, want one rejected line", lines)
 	}
 }
+
+func TestOversizedResultTruncatedWithMarker(t *testing.T) {
+	big := strings.Repeat("log line payload ", 100) // well over the budget below
+	var buf bytes.Buffer
+	p := NewPipeline(Options{MaxTimeRange: time.Hour, MaxResultBytes: 128, AuditSink: &buf},
+		okExecutor(connector.ToolResult{Content: map[string]any{"entries": big}}, nil))
+
+	res, err := p.Execute(context.Background(), connector.ToolCall{
+		Tool: "query_metrics",
+		Args: map[string]any{"query": "up"},
+	})
+	if err != nil {
+		t.Fatalf("Execute = %v, truncation must not fail the call", err)
+	}
+
+	content, ok := res.Content.(map[string]any)
+	if !ok {
+		t.Fatalf("truncated content = %T, want map with truncation marker", res.Content)
+	}
+	if content["truncated"] != true {
+		t.Errorf("content[truncated] = %v, want true", content["truncated"])
+	}
+	total, _ := content["total_bytes"].(int)
+	if total <= 128 {
+		t.Errorf("content[total_bytes] = %v, want the full pre-truncation size", content["total_bytes"])
+	}
+	notice, _ := content["notice"].(string)
+	if !strings.Contains(notice, "truncated") {
+		t.Errorf("content[notice] = %q, want an explicit truncation marker", notice)
+	}
+	partial, _ := content["partial"].(string)
+	if len(partial) == 0 || len(partial) > 128 {
+		t.Errorf("partial length = %d, want 1..128 bytes", len(partial))
+	}
+
+	lines := auditLines(t, &buf)
+	if len(lines) != 1 {
+		t.Fatalf("got %d audit lines, want 1", len(lines))
+	}
+	line := lines[0]
+	auditTotal, _ := line["total_bytes"].(float64)
+	if int(auditTotal) != total {
+		t.Errorf("audit total_bytes = %v, want %d", line["total_bytes"], total)
+	}
+	auditBytes, _ := line["bytes"].(float64)
+	if auditBytes <= 0 || int(auditBytes) >= total {
+		t.Errorf("audit bytes = %v, want truncated size smaller than total %d", line["bytes"], total)
+	}
+}
+
+func TestResultWithinBudgetPassesUntouched(t *testing.T) {
+	var buf bytes.Buffer
+	p := NewPipeline(Options{MaxTimeRange: time.Hour, MaxResultBytes: 1 << 20, AuditSink: &buf},
+		okExecutor(connector.ToolResult{Content: map[string]any{"entries": "small"}}, nil))
+
+	res, err := p.Execute(context.Background(), connector.ToolCall{
+		Tool: "query_metrics",
+		Args: map[string]any{"query": "up"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := res.Content.(map[string]any)
+	if _, ok := content["truncated"]; ok {
+		t.Error("small result was wrapped in a truncation marker")
+	}
+	lines := auditLines(t, &buf)
+	if _, ok := lines[0]["total_bytes"]; ok {
+		t.Error("audit line carries total_bytes for an untruncated result")
+	}
+}

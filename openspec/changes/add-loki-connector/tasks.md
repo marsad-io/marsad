@@ -9,8 +9,8 @@ TDD throughout: failing test first, then implement. Each numbered task is indepe
 
 ## 2. Result size budget guardrail
 
-- [ ] 2.1 Test: result exceeding configured byte budget is truncated with marker and total count; audit line records truncated + total sizes -> implement size-budget guardrail in the pipeline
-- [ ] 2.2 Test: budget configurable via `marsad.yaml` and `MARSAD_` env override, with a sane default -> wire config
+- [x] 2.1 Test: result exceeding configured byte budget is truncated with marker and total count; audit line records truncated + total sizes -> implement size-budget guardrail in the pipeline
+- [x] 2.2 Test: budget configurable via `marsad.yaml` and `MARSAD_` env override, with a sane default -> wire config
 
 ## 3. Loki connector
 

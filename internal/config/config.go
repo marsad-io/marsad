@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,10 @@ import (
 
 // DefaultMaxTimeRange caps query time ranges when the operator sets none.
 const DefaultMaxTimeRange = 24 * time.Hour
+
+// DefaultMaxResultBytes caps tool result sizes when the operator sets none.
+// 1 MiB keeps even chatty log searches inside a sane context budget.
+const DefaultMaxResultBytes = 1 << 20
 
 // Config is the fully resolved gateway configuration.
 type Config struct {
@@ -33,7 +38,8 @@ type ConnectorConfig struct {
 
 // GuardrailsConfig holds gateway-wide guardrail settings.
 type GuardrailsConfig struct {
-	MaxTimeRange time.Duration
+	MaxTimeRange   time.Duration
+	MaxResultBytes int
 }
 
 // AuditConfig controls the audit log sink.
@@ -58,7 +64,8 @@ type yamlConnector struct {
 }
 
 type yamlGuardrails struct {
-	MaxTimeRange string `yaml:"max_time_range"`
+	MaxTimeRange   string `yaml:"max_time_range"`
+	MaxResultBytes *int   `yaml:"max_result_bytes"`
 }
 
 type yamlAudit struct {
@@ -87,7 +94,7 @@ func Load(path string, getenv func(string) string) (Config, error) {
 	}
 
 	cfg := Config{
-		Guardrails: GuardrailsConfig{MaxTimeRange: DefaultMaxTimeRange},
+		Guardrails: GuardrailsConfig{MaxTimeRange: DefaultMaxTimeRange, MaxResultBytes: DefaultMaxResultBytes},
 		Audit:      AuditConfig{Sink: "stderr", IncludeArguments: yc.Audit.IncludeArguments},
 	}
 
@@ -97,6 +104,12 @@ func Load(path string, getenv func(string) string) (Config, error) {
 			return Config{}, fmt.Errorf("config %s: guardrails.max_time_range: %w", path, err)
 		}
 		cfg.Guardrails.MaxTimeRange = d
+	}
+	if yc.Guardrails.MaxResultBytes != nil {
+		if *yc.Guardrails.MaxResultBytes <= 0 {
+			return Config{}, fmt.Errorf("config %s: guardrails.max_result_bytes must be positive, got %d", path, *yc.Guardrails.MaxResultBytes)
+		}
+		cfg.Guardrails.MaxResultBytes = *yc.Guardrails.MaxResultBytes
 	}
 	if yc.Audit.Sink != "" {
 		cfg.Audit.Sink = yc.Audit.Sink
@@ -137,6 +150,13 @@ func applyEnvOverrides(cfg *Config, getenv func(string) string) error {
 			return fmt.Errorf("MARSAD_GUARDRAILS_MAX_TIME_RANGE: %w", err)
 		}
 		cfg.Guardrails.MaxTimeRange = d
+	}
+	if v := getenv("MARSAD_GUARDRAILS_MAX_RESULT_BYTES"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return fmt.Errorf("MARSAD_GUARDRAILS_MAX_RESULT_BYTES: %q is not a positive integer", v)
+		}
+		cfg.Guardrails.MaxResultBytes = n
 	}
 	return nil
 }

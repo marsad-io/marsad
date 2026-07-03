@@ -39,6 +39,7 @@ Credentials are never written inline. A field like `password:` or `token:` in th
 | Field | Default | Description |
 |-------|---------|-------------|
 | `max_time_range` | `24h` | Maximum time span a range query may cover, as a Go duration string (`30m`, `6h`, `24h`). Oversized queries are rejected before reaching the backend. |
+| `max_result_bytes` | `1048576` (1 MiB) | Byte budget per tool result. A result whose JSON serialization exceeds it is truncated: the tool result becomes a wrapper with `truncated: true`, `total_bytes`, `returned_bytes`, a human-readable `notice`, and the leading `partial` bytes, so agents know the result is partial. Must be positive. |
 
 ## `audit`
 
@@ -49,7 +50,7 @@ Every tool call - success, failure, or guardrail rejection - emits exactly one J
 | `sink` | `stderr` | Where audit lines go: `stderr` or a file path (append, `0600`). |
 | `include_arguments` | `false` | Audit lines carry only a hash of the arguments by default. Set `true` to record full argument values. |
 
-Audit line fields: `ts`, `tool`, `connector`, `args_hash`, `duration_ms`, `outcome` (`ok` / `error` / `rejected`), `bytes`, plus `error` on failures and `args` when opted in.
+Audit line fields: `ts`, `tool`, `connector`, `args_hash`, `duration_ms`, `outcome` (`ok` / `error` / `rejected`), `bytes`, plus `error` on failures, `args` when opted in, and `total_bytes` (the pre-truncation size) when a result was truncated by `max_result_bytes`.
 
 ## Environment overrides
 
@@ -59,5 +60,6 @@ Audit line fields: `ts`, `tool`, `connector`, `args_hash`, `duration_ms`, `outco
 |----------|-----------|
 | `MARSAD_AUDIT_SINK` | `audit.sink` |
 | `MARSAD_GUARDRAILS_MAX_TIME_RANGE` | `guardrails.max_time_range` |
+| `MARSAD_GUARDRAILS_MAX_RESULT_BYTES` | `guardrails.max_result_bytes` |
 
 Secrets always come from the environment via `bearer_token_env` references, never from the file.

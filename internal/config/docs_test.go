@@ -46,7 +46,7 @@ func TestConfigurationDocsCoverEveryField(t *testing.T) {
 	}
 
 	// Env overrides are part of the config surface too.
-	for _, env := range []string{"MARSAD_AUDIT_SINK", "MARSAD_GUARDRAILS_MAX_TIME_RANGE"} {
+	for _, env := range []string{"MARSAD_AUDIT_SINK", "MARSAD_GUARDRAILS_MAX_TIME_RANGE", "MARSAD_GUARDRAILS_MAX_RESULT_BYTES"} {
 		if !strings.Contains(string(docs), env) {
 			t.Errorf("docs/configuration.md does not document env override %s", env)
 		}

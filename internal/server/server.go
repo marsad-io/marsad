@@ -66,6 +66,7 @@ func New(cfg config.Config, version string, opts ...Option) (*Server, error) {
 	s := &Server{registry: registry}
 	s.pipeline = guardrails.NewPipeline(guardrails.Options{
 		MaxTimeRange:     cfg.Guardrails.MaxTimeRange,
+		MaxResultBytes:   cfg.Guardrails.MaxResultBytes,
 		AuditSink:        auditWriter,
 		IncludeArguments: cfg.Audit.IncludeArguments,
 	}, s.execute)
