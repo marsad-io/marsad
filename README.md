@@ -13,13 +13,18 @@ Point any MCP-capable agent (Claude, IDE assistants, SRE agents) at Marsad and i
 
 ## Quickstart
 
-You need Go 1.24+ and Docker. Start a Prometheus with real data (it scrapes itself), then run Marsad against it:
+You need Go 1.24+ and Docker. Start a Prometheus with real data (it scrapes itself) and a Loki, then run Marsad against both:
 
 ```bash
-# 1. Start the backend
+# 1. Start the backends
 docker compose -f examples/quickstart/docker-compose.yml up -d
 
-# 2. Run the gateway over HTTP
+# 2. Give Loki something to find
+curl -s -X POST http://localhost:3100/loki/api/v1/push \
+  -H 'Content-Type: application/json' \
+  -d "{\"streams\":[{\"stream\":{\"app\":\"quickstart\"},\"values\":[[\"$(date +%s)000000000\",\"hello from the quickstart\"]]}]}"
+
+# 3. Run the gateway over HTTP
 go run ./cmd/marsad serve --config examples/quickstart/marsad.yaml --transport http --listen :8811
 ```
 
@@ -35,22 +40,22 @@ Or over stdio, no HTTP port at all:
 claude mcp add marsad -- go run ./cmd/marsad serve --config examples/quickstart/marsad.yaml
 ```
 
-Then ask your agent something like "what metrics does this Prometheus have?" - it will call `list_metric_names` and `query_metrics` through Marsad, and every call lands in the audit log (stderr by default). Configuration is documented in [docs/configuration.md](docs/configuration.md).
+Then ask your agent something like "what metrics does this Prometheus have?" or "search the logs for app quickstart" - it will call `list_metric_names`, `query_metrics`, and `search_logs` through Marsad, and every call lands in the audit log (stderr by default). Configuration is documented in [docs/configuration.md](docs/configuration.md).
 
 ## Status
 
-Early development. The first milestone - MCP server core with stdio and streamable HTTP transports, the Prometheus connector, and the guardrails baseline (read-only enforcement, query time-range caps, per-call audit log, outbound allowlist) - is implemented; see [`openspec/changes/`](openspec/changes/) for the spec.
+Early development. Implemented so far: the MCP server core with stdio and streamable HTTP transports, the Prometheus and Loki connectors, and the guardrails baseline (read-only enforcement, query time-range caps, result size budget, per-call audit log, outbound allowlist); see [`openspec/`](openspec/) for the specs.
 
-## Planned v1 connectors
+## v1 connectors
 
-| Backend | Tools |
-|---------|-------|
-| Prometheus (Thanos/Mimir compatible) | `query_metrics`, `list_metric_names` |
-| Loki | `search_logs` |
-| Elasticsearch / OpenSearch | `search_logs` |
-| ClickHouse | `query_metrics`, `search_logs` |
-| Alertmanager | `list_alerts` |
-| Kubernetes API (read-only) | `get_k8s_events`, `get_pod_status`, `get_pod_logs` |
+| Backend | Tools | Status |
+|---------|-------|--------|
+| Prometheus (Thanos/Mimir compatible) | `query_metrics`, `list_metric_names` | available |
+| Loki | `search_logs`, `list_log_labels` | available |
+| Elasticsearch / OpenSearch | `search_logs` | planned |
+| ClickHouse | `query_metrics`, `search_logs` | planned |
+| Alertmanager | `list_alerts` | planned |
+| Kubernetes API (read-only) | `get_k8s_events`, `get_pod_status`, `get_pod_logs` | planned |
 
 ## License
 

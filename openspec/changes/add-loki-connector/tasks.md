@@ -27,5 +27,5 @@ TDD throughout: failing test first, then implement. Each numbered task is indepe
 
 ## 5. Docs
 
-- [ ] 5.1 Quickstart gains Loki (docker compose + config); README connector table updated
-- [ ] 5.2 `docs/configuration.md` covers loki connector type and size budget (docs-coverage test extended)
+- [x] 5.1 Quickstart gains Loki (docker compose + config); README connector table updated
+- [x] 5.2 `docs/configuration.md` covers loki connector type and size budget (docs-coverage test extended)

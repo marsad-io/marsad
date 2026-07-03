@@ -12,9 +12,15 @@ connectors:
     type: prometheus
     url: http://prometheus:9090
     bearer_token_env: PROM_TOKEN   # optional, name of an env var
+  - name: prod-loki
+    type: loki
+    url: http://loki:3100
+    basic_auth_user_env: LOKI_USER          # optional, pairs with the password ref
+    basic_auth_password_env: LOKI_PASSWORD
 
 guardrails:
   max_time_range: 24h
+  max_result_bytes: 1048576
 
 audit:
   sink: stderr
@@ -28,7 +34,7 @@ List of backends the gateway talks to. Marsad makes no network connection to any
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | yes | Unique name for this connector. Agents use it in the `connector` tool argument when more than one connector serves a tool. |
-| `type` | yes | Backend type. Currently `prometheus` (Thanos and Mimir compatible). |
+| `type` | yes | Backend type: `prometheus` (Thanos and Mimir compatible) serving `query_metrics` and `list_metric_names`, or `loki` serving `search_logs` and `list_log_labels`. |
 | `url` | yes | Base URL of the backend. |
 | `bearer_token_env` | no | Name of an environment variable holding a bearer token for the backend. |
 | `basic_auth_user_env` | no | Name of an environment variable holding the basic auth username. Use together with `basic_auth_password_env`; mutually exclusive with `bearer_token_env`. |
@@ -64,4 +70,4 @@ Audit line fields: `ts`, `tool`, `connector`, `args_hash`, `duration_ms`, `outco
 | `MARSAD_GUARDRAILS_MAX_TIME_RANGE` | `guardrails.max_time_range` |
 | `MARSAD_GUARDRAILS_MAX_RESULT_BYTES` | `guardrails.max_result_bytes` |
 
-Secrets always come from the environment via `bearer_token_env` references, never from the file.
+Secrets always come from the environment via `bearer_token_env` or the `basic_auth_*_env` references, never from the file.
