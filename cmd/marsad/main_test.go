@@ -20,6 +20,32 @@ func TestVersionCommandPrintsVersion(t *testing.T) {
 	}
 }
 
+func TestServeMissingConfigFailsWithClearError(t *testing.T) {
+	var out bytes.Buffer
+
+	code := run([]string{"serve", "--config", "/nonexistent/marsad.yaml"}, &out)
+
+	if code == 0 {
+		t.Fatal("run(serve, missing config) exit code = 0, want non-zero")
+	}
+	if !bytes.Contains(out.Bytes(), []byte("/nonexistent/marsad.yaml")) {
+		t.Errorf("output %q does not name the config file", out.String())
+	}
+}
+
+func TestServeUnknownTransportFails(t *testing.T) {
+	var out bytes.Buffer
+
+	code := run([]string{"serve", "--transport", "carrier-pigeon"}, &out)
+
+	if code == 0 {
+		t.Fatal("run(serve, bad transport) exit code = 0, want non-zero")
+	}
+	if !bytes.Contains(out.Bytes(), []byte("carrier-pigeon")) {
+		t.Errorf("output %q does not name the bad transport", out.String())
+	}
+}
+
 func TestUnknownCommandFailsWithUsage(t *testing.T) {
 	var out bytes.Buffer
 
