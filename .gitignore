@@ -1,0 +1,21 @@
+# Binaries
+/marsad
+/bin/
+/dist/
+
+# Test artifacts
+*.test
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Local env
+.env
+*.local.yaml

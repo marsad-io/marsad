@@ -1,0 +1,25 @@
+schema: spec-driven
+
+context: |
+  Marsad - vendor-neutral observability MCP gateway. A single Go binary that
+  exposes self-hosted observability backends (Prometheus, Loki,
+  Elasticsearch/OpenSearch, ClickHouse, Alertmanager, Kubernetes API) to AI
+  agents through one consistent, guardrailed MCP tool schema.
+
+  Tech stack: Go 1.24+, official MCP Go SDK (github.com/modelcontextprotocol/go-sdk),
+  module path github.com/marsad-io/marsad.
+  Testing: TDD is mandatory - write the failing test first, then implement.
+  Unit tests alongside code; integration tests with testcontainers-go against
+  real backend images; golden-file tests for MCP tool schemas.
+  Design principles: read-only by default, zero telemetry, air-gap friendly
+  (no mandatory outbound calls), every agent tool call audit-logged.
+  License: Apache-2.0. Conventional commits. No personal names in code, docs,
+  or commits. Use plain hyphens, never em dashes, in all prose.
+
+rules:
+  proposal:
+    - Always include a "Non-goals" section
+    - Keep proposals under 600 words
+  tasks:
+    - Every implementation task starts with a failing test (TDD)
+    - Break tasks into independently committable chunks
