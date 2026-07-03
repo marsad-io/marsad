@@ -19,3 +19,6 @@ coverage.html
 # Local env
 .env
 *.local.yaml
+
+# Worktrees
+.worktrees/
