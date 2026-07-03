@@ -1,0 +1,10 @@
+{
+  "name": "list_connectors",
+  "description": "List the configured connectors with their type and current health status.",
+  "readOnly": true,
+  "inputSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  }
+}

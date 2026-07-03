@@ -1,0 +1,34 @@
+{
+  "name": "query_metrics",
+  "description": "Run a metrics query (instant or range) against a configured metrics backend such as Prometheus, Thanos, or Mimir.",
+  "readOnly": true,
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "connector": {
+        "type": "string",
+        "description": "Name of the configured connector to query. Optional when exactly one connector serves this tool."
+      },
+      "end": {
+        "type": "string",
+        "description": "Range end as RFC 3339 timestamp or Unix seconds. Requires start and step."
+      },
+      "query": {
+        "type": "string",
+        "description": "Query expression in the backend's language, e.g. PromQL."
+      },
+      "start": {
+        "type": "string",
+        "description": "Range start as RFC 3339 timestamp or Unix seconds. Omit for an instant query."
+      },
+      "step": {
+        "type": "string",
+        "description": "Range resolution as a duration string, e.g. 30s or 5m."
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "additionalProperties": false
+  }
+}

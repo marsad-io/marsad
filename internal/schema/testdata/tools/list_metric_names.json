@@ -1,0 +1,15 @@
+{
+  "name": "list_metric_names",
+  "description": "List metric names known to a configured metrics backend.",
+  "readOnly": true,
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "connector": {
+        "type": "string",
+        "description": "Name of the configured connector to query. Optional when exactly one connector serves this tool."
+      }
+    },
+    "additionalProperties": false
+  }
+}
