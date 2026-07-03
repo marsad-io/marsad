@@ -22,7 +22,7 @@ TDD throughout: failing test first, then implement. Each numbered task is indepe
 
 ## 4. Two-connector wiring
 
-- [ ] 4.1 Test: config with prometheus + loki registers the tool union; `list_connectors` shows both with health -> extend server tests
+- [x] 4.1 Test: config with prometheus + loki registers the tool union; `list_connectors` shows both with health -> extend server tests
 - [ ] 4.2 E2e smoke: MCP client -> stdio server -> Prometheus + Loki containers -> metric query and log search in one session; audit verified
 
 ## 5. Docs

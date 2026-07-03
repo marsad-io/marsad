@@ -15,6 +15,7 @@ import (
 
 	"github.com/marsad-io/marsad/internal/config"
 	"github.com/marsad-io/marsad/internal/connector"
+	"github.com/marsad-io/marsad/internal/connector/loki"
 	"github.com/marsad-io/marsad/internal/connector/prometheus"
 	"github.com/marsad-io/marsad/internal/guardrails"
 	"github.com/marsad-io/marsad/internal/schema"
@@ -83,6 +84,12 @@ func buildConnector(cc config.ConnectorConfig) (connector.Connector, error) {
 	switch cc.Type {
 	case "prometheus":
 		return prometheus.New(cc.Name, cc.URL, cc.BearerToken, client)
+	case "loki":
+		return loki.New(cc.Name, cc.URL, loki.Auth{
+			BearerToken:   cc.BearerToken,
+			BasicUser:     cc.BasicAuthUser,
+			BasicPassword: cc.BasicAuthPassword,
+		}, client)
 	default:
 		return nil, fmt.Errorf("connector %q: unsupported type %q", cc.Name, cc.Type)
 	}
