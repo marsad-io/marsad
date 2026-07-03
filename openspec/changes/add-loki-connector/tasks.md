@@ -18,7 +18,7 @@ TDD throughout: failing test first, then implement. Each numbered task is indepe
 - [x] 3.2 Test: `list_log_labels` maps to `/loki/api/v1/labels` and `/loki/api/v1/label/{name}/values` -> implement
 - [x] 3.3 Test: `Health` via `/ready`; unreachable Loki reports unhealthy without affecting other connectors -> implement
 - [x] 3.4 Test: bearer/basic auth via env references only; inline secrets rejected by config -> implement auth plumbing
-- [ ] 3.5 Integration test (testcontainers, real Loki image): seed logs, search end to end
+- [x] 3.5 Integration test (testcontainers, real Loki image): seed logs, search end to end
 
 ## 4. Two-connector wiring
 
