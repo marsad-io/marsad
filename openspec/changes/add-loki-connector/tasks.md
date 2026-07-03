@@ -4,8 +4,8 @@ TDD throughout: failing test first, then implement. Each numbered task is indepe
 
 ## 1. Unified log tool schema
 
-- [ ] 1.1 Test: golden files for `search_logs` and `list_log_labels`; required arguments are backend-neutral -> implement ToolSpecs in `internal/schema`
-- [ ] 1.2 Test: argument validation for time range and limit bounds -> extend validation helper
+- [x] 1.1 Test: golden files for `search_logs` and `list_log_labels`; required arguments are backend-neutral -> implement ToolSpecs in `internal/schema`
+- [x] 1.2 Test: argument validation for time range and limit bounds -> extend validation helper
 
 ## 2. Result size budget guardrail
 

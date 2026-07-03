@@ -31,6 +31,54 @@ func Validate(spec ToolSpec, args map[string]any) error {
 		if err := checkType(key, prop.Type, value); err != nil {
 			return fmt.Errorf("tool %s: %w", spec.Name, err)
 		}
+		if err := checkEnum(key, prop.Enum, value); err != nil {
+			return fmt.Errorf("tool %s: %w", spec.Name, err)
+		}
+		if err := checkBounds(key, prop, value); err != nil {
+			return fmt.Errorf("tool %s: %w", spec.Name, err)
+		}
+	}
+	return nil
+}
+
+// checkEnum rejects values outside a property's declared enum.
+func checkEnum(key string, allowed []string, value any) error {
+	if len(allowed) == 0 {
+		return nil
+	}
+	s, ok := value.(string)
+	if !ok {
+		return nil // type mismatch already reported by checkType
+	}
+	for _, a := range allowed {
+		if s == a {
+			return nil
+		}
+	}
+	return fmt.Errorf("argument %q must be one of %v, got %q", key, allowed, s)
+}
+
+// checkBounds enforces a numeric property's declared minimum and maximum.
+func checkBounds(key string, prop Property, value any) error {
+	if prop.Minimum == nil && prop.Maximum == nil {
+		return nil
+	}
+	var n float64
+	switch v := value.(type) {
+	case float64:
+		n = v
+	case int:
+		n = float64(v)
+	case int64:
+		n = float64(v)
+	default:
+		return nil // type mismatch already reported by checkType
+	}
+	if prop.Minimum != nil && n < *prop.Minimum {
+		return fmt.Errorf("argument %q must be at least %g, got %g", key, *prop.Minimum, n)
+	}
+	if prop.Maximum != nil && n > *prop.Maximum {
+		return fmt.Errorf("argument %q must be at most %g, got %g", key, *prop.Maximum, n)
 	}
 	return nil
 }

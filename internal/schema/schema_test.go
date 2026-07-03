@@ -63,3 +63,45 @@ func TestLookupFindsSpecByName(t *testing.T) {
 		t.Error("Lookup(no_such_tool) unexpectedly found")
 	}
 }
+
+// The search_logs contract must stay backend-neutral so Elasticsearch,
+// OpenSearch, and ClickHouse can implement the identical tool later.
+func TestSearchLogsRequiredArgumentsAreBackendNeutral(t *testing.T) {
+	spec, ok := Lookup("search_logs")
+	if !ok {
+		t.Fatal("Lookup(search_logs) not found")
+	}
+	if !spec.ReadOnly {
+		t.Error("search_logs must be read-only")
+	}
+
+	want := []string{"query", "start", "end"}
+	if len(spec.Input.Required) != len(want) {
+		t.Fatalf("required = %v, want exactly %v", spec.Input.Required, want)
+	}
+	for i, name := range want {
+		if spec.Input.Required[i] != name {
+			t.Errorf("required[%d] = %q, want %q", i, spec.Input.Required[i], name)
+		}
+	}
+
+	// Backend-specific capabilities ride along as optional arguments only.
+	for _, optional := range []string{"limit", "direction", "connector"} {
+		if _, ok := spec.Input.Properties[optional]; !ok {
+			t.Errorf("search_logs is missing optional argument %q", optional)
+		}
+	}
+}
+
+func TestListLogLabelsHasNoRequiredArguments(t *testing.T) {
+	spec, ok := Lookup("list_log_labels")
+	if !ok {
+		t.Fatal("Lookup(list_log_labels) not found")
+	}
+	if len(spec.Input.Required) != 0 {
+		t.Errorf("required = %v, want none", spec.Input.Required)
+	}
+	if _, ok := spec.Input.Properties["label"]; !ok {
+		t.Error("list_log_labels is missing the optional label argument")
+	}
+}

@@ -1,0 +1,46 @@
+{
+  "name": "search_logs",
+  "description": "Search logs in a configured log backend such as Loki. The query uses the backend's selection language, e.g. a LogQL stream selector.",
+  "readOnly": true,
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "connector": {
+        "type": "string",
+        "description": "Name of the configured connector to query. Optional when exactly one connector serves this tool."
+      },
+      "direction": {
+        "type": "string",
+        "description": "Order of returned entries by timestamp: backward (newest first, the default) or forward (oldest first).",
+        "enum": [
+          "backward",
+          "forward"
+        ]
+      },
+      "end": {
+        "type": "string",
+        "description": "Search window end as RFC 3339 timestamp or Unix seconds."
+      },
+      "limit": {
+        "type": "number",
+        "description": "Maximum number of log entries to return, between 1 and 5000. Defaults to the backend's own limit.",
+        "minimum": 1,
+        "maximum": 5000
+      },
+      "query": {
+        "type": "string",
+        "description": "Log selection query in the backend's language, e.g. the LogQL selector {app=\"api\"} optionally followed by filter expressions."
+      },
+      "start": {
+        "type": "string",
+        "description": "Search window start as RFC 3339 timestamp or Unix seconds."
+      }
+    },
+    "required": [
+      "query",
+      "start",
+      "end"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -24,7 +24,11 @@ type Property struct {
 	Type        string   `json:"type"`
 	Description string   `json:"description,omitempty"`
 	Enum        []string `json:"enum,omitempty"`
+	Minimum     *float64 `json:"minimum,omitempty"`
+	Maximum     *float64 `json:"maximum,omitempty"`
 }
+
+func bound(v float64) *float64 { return &v }
 
 const connectorArgDescription = "Name of the configured connector to query. Optional when exactly one connector serves this tool."
 
@@ -52,6 +56,37 @@ var all = []ToolSpec{
 		Input: InputSchema{
 			Type: "object",
 			Properties: map[string]Property{
+				"connector": {Type: "string", Description: connectorArgDescription},
+			},
+		},
+	},
+	{
+		Name:        "search_logs",
+		Description: "Search logs in a configured log backend such as Loki. The query uses the backend's selection language, e.g. a LogQL stream selector.",
+		ReadOnly:    true,
+		Input: InputSchema{
+			Type: "object",
+			Properties: map[string]Property{
+				"query":     {Type: "string", Description: `Log selection query in the backend's language, e.g. the LogQL selector {app="api"} optionally followed by filter expressions.`},
+				"start":     {Type: "string", Description: "Search window start as RFC 3339 timestamp or Unix seconds."},
+				"end":       {Type: "string", Description: "Search window end as RFC 3339 timestamp or Unix seconds."},
+				"limit":     {Type: "number", Description: "Maximum number of log entries to return, between 1 and 5000. Defaults to the backend's own limit.", Minimum: bound(1), Maximum: bound(5000)},
+				"direction": {Type: "string", Description: "Order of returned entries by timestamp: backward (newest first, the default) or forward (oldest first).", Enum: []string{"backward", "forward"}},
+				"connector": {Type: "string", Description: connectorArgDescription},
+			},
+			Required: []string{"query", "start", "end"},
+		},
+	},
+	{
+		Name:        "list_log_labels",
+		Description: "List log label names known to a configured log backend, or the values of one label when the label argument is set.",
+		ReadOnly:    true,
+		Input: InputSchema{
+			Type: "object",
+			Properties: map[string]Property{
+				"label":     {Type: "string", Description: "When set, return the values of this label instead of the label names."},
+				"start":     {Type: "string", Description: "Optional window start as RFC 3339 timestamp or Unix seconds."},
+				"end":       {Type: "string", Description: "Optional window end as RFC 3339 timestamp or Unix seconds."},
 				"connector": {Type: "string", Description: connectorArgDescription},
 			},
 		},

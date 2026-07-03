@@ -1,0 +1,27 @@
+{
+  "name": "list_log_labels",
+  "description": "List log label names known to a configured log backend, or the values of one label when the label argument is set.",
+  "readOnly": true,
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "connector": {
+        "type": "string",
+        "description": "Name of the configured connector to query. Optional when exactly one connector serves this tool."
+      },
+      "end": {
+        "type": "string",
+        "description": "Optional window end as RFC 3339 timestamp or Unix seconds."
+      },
+      "label": {
+        "type": "string",
+        "description": "When set, return the values of this label instead of the label names."
+      },
+      "start": {
+        "type": "string",
+        "description": "Optional window start as RFC 3339 timestamp or Unix seconds."
+      }
+    },
+    "additionalProperties": false
+  }
+}
