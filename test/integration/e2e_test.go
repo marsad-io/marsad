@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +14,9 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/marsad-io/marsad/internal/connector"
+	"github.com/marsad-io/marsad/internal/connector/loki"
 )
 
 // buildMarsad compiles the real binary the way an operator would run it.
@@ -37,10 +41,19 @@ func repoRoot(t *testing.T) string {
 }
 
 // End-to-end smoke test: real MCP client -> marsad binary over stdio ->
-// real Prometheus container, with audit lines verified on disk.
+// real Prometheus and Loki containers, metric query and log search in one
+// session, with audit lines verified on disk.
 func TestEndToEndStdioSmoke(t *testing.T) {
 	promURL := startPrometheus(t)
+	lokiURL := startLoki(t)
 	bin := buildMarsad(t)
+
+	// Seed Loki and wait until the entries are searchable, so the single
+	// search_logs call through the session is deterministic.
+	seedLokiLogs(t, lokiURL,
+		map[string]string{"app": "marsad-e2e"},
+		[]string{"e2e log line one", "e2e log line two"})
+	waitForLokiEntries(t, lokiURL, `{app="marsad-e2e"}`, 2)
 
 	dir := t.TempDir()
 	auditPath := filepath.Join(dir, "audit.jsonl")
@@ -50,11 +63,14 @@ connectors:
   - name: prom-e2e
     type: prometheus
     url: %s
+  - name: loki-e2e
+    type: loki
+    url: %s
 guardrails:
   max_time_range: 24h
 audit:
   sink: %s
-`, promURL, auditPath)
+`, promURL, lokiURL, auditPath)
 	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -75,8 +91,8 @@ audit:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list.Tools) != 3 {
-		t.Errorf("got %d tools, want 3", len(list.Tools))
+	if len(list.Tools) != 5 {
+		t.Errorf("got %d tools, want the union of metric, log, and built-in tools (5)", len(list.Tools))
 	}
 
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{
@@ -90,12 +106,33 @@ audit:
 		t.Fatalf("query_metrics returned tool error: %+v", res.Content)
 	}
 
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "search_logs",
+		Arguments: map[string]any{
+			"query": `{app="marsad-e2e"}`,
+			"start": time.Now().Add(-5 * time.Minute).UTC().Format(time.RFC3339),
+			"end":   time.Now().Add(5 * time.Minute).UTC().Format(time.RFC3339),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("search_logs returned tool error: %+v", res.Content)
+	}
+	if text := textContent(t, res); !strings.Contains(text, "e2e log line one") {
+		t.Errorf("search_logs result %s missing seeded line", text)
+	}
+
 	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "list_connectors"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.IsError {
 		t.Fatalf("list_connectors returned tool error: %+v", res.Content)
+	}
+	if text := textContent(t, res); !strings.Contains(text, `"loki-e2e"`) || !strings.Contains(text, `"prom-e2e"`) {
+		t.Errorf("list_connectors result %s missing a connector", text)
 	}
 
 	session.Close()
@@ -105,12 +142,61 @@ audit:
 		t.Fatalf("reading audit log: %v", err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(audit)), "\n")
-	if len(lines) != 2 {
-		t.Errorf("got %d audit lines, want 2:\n%s", len(lines), audit)
+	if len(lines) != 3 {
+		t.Errorf("got %d audit lines, want 3:\n%s", len(lines), audit)
 	}
 	for _, line := range lines {
 		if !strings.Contains(line, `"outcome":"ok"`) {
 			t.Errorf("audit line without ok outcome: %s", line)
 		}
+	}
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, `"connector":"prom-e2e"`) || !strings.Contains(joined, `"connector":"loki-e2e"`) {
+		t.Errorf("audit lines do not attribute calls to both connectors:\n%s", joined)
+	}
+}
+
+// textContent returns the first text payload of a tool result.
+func textContent(t *testing.T, res *mcp.CallToolResult) string {
+	t.Helper()
+	for _, c := range res.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			return tc.Text
+		}
+	}
+	t.Fatalf("result has no text content: %+v", res)
+	return ""
+}
+
+// waitForLokiEntries polls the query API until the selector returns want
+// entries, so later assertions do not race ingestion.
+func waitForLokiEntries(t *testing.T, baseURL, selector string, want int) {
+	t.Helper()
+	c, err := loki.New("loki-e2e-wait", baseURL, loki.Auth{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := map[string]any{
+		"query": selector,
+		"start": time.Now().Add(-5 * time.Minute).UTC().Format(time.RFC3339),
+		"end":   time.Now().Add(5 * time.Minute).UTC().Format(time.RFC3339),
+	}
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		res, err := c.Execute(context.Background(), connector.ToolCall{Tool: "search_logs", Args: args})
+		if err != nil {
+			t.Fatalf("polling loki: %v", err)
+		}
+		b, err := json.Marshal(res.Content)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), fmt.Sprintf(`"count":%d`, want)) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("seeded entries not searchable after 30s; last result: %s", b)
+		}
+		time.Sleep(2 * time.Second)
 	}
 }
