@@ -196,3 +196,29 @@ func TestIncludeArgumentsOptIn(t *testing.T) {
 		t.Errorf("audit line does not include opted-in args: %v", lines[0])
 	}
 }
+
+func TestInvalidArgumentsRejectedBeforeExecution(t *testing.T) {
+	var buf bytes.Buffer
+	called := false
+	p := NewPipeline(Options{MaxTimeRange: time.Hour, AuditSink: &buf},
+		func(context.Context, connector.ToolCall) (connector.ToolResult, string, error) {
+			called = true
+			return connector.ToolResult{}, "", nil
+		})
+
+	_, err := p.Execute(context.Background(), connector.ToolCall{
+		Tool: "query_metrics",
+		Args: map[string]any{"query": "up", "timeout": "30s"},
+	})
+
+	if err == nil {
+		t.Fatal("Execute(unknown argument) = nil error")
+	}
+	if called {
+		t.Error("executor ran despite invalid arguments")
+	}
+	lines := auditLines(t, &buf)
+	if len(lines) != 1 || lines[0]["outcome"] != "rejected" {
+		t.Errorf("audit lines = %v, want one rejected line", lines)
+	}
+}

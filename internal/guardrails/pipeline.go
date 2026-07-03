@@ -64,7 +64,18 @@ func (p *Pipeline) check(call connector.ToolCall) error {
 	if err := p.checkReadOnly(call); err != nil {
 		return err
 	}
+	if err := p.checkArguments(call); err != nil {
+		return err
+	}
 	return p.checkTimeRange(call)
+}
+
+func (p *Pipeline) checkArguments(call connector.ToolCall) error {
+	spec, ok := schema.Lookup(call.Tool)
+	if !ok {
+		return fmt.Errorf("unknown tool %q", call.Tool)
+	}
+	return schema.Validate(spec, call.Args)
 }
 
 func (p *Pipeline) checkReadOnly(call connector.ToolCall) error {
