@@ -9,4 +9,4 @@ The gateway SHALL enforce a configurable maximum result size per tool call; over
 #### Scenario: Oversized log result truncated
 
 - **WHEN** a `search_logs` call produces a payload exceeding the configured byte budget
-- **THEN** the result is truncated to the budget, the tool result carries a truncation marker with the total available count, and the audit line records both truncated and total sizes
+- **THEN** the result is truncated to the budget (UTF-8 safe), the tool result carries a truncation marker with total and returned byte sizes, and the audit line records both truncated and total sizes
