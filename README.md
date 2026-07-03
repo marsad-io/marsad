@@ -11,9 +11,35 @@ Point any MCP-capable agent (Claude, IDE assistants, SRE agents) at Marsad and i
 - **Guardrailed for agents.** Read-only by default, per-connector scoping, query cost limits, and a full audit log of every tool call. You always know what an agent read and how much it cost.
 - **One schema.** Agents see consistent tools, not per-vendor APIs. The same prompt works whether logs live in Loki or Elasticsearch.
 
+## Quickstart
+
+You need Go 1.24+ and Docker. Start a Prometheus with real data (it scrapes itself), then run Marsad against it:
+
+```bash
+# 1. Start the backend
+docker compose -f examples/quickstart/docker-compose.yml up -d
+
+# 2. Run the gateway over HTTP
+go run ./cmd/marsad serve --config examples/quickstart/marsad.yaml --transport http --listen :8811
+```
+
+Connect Claude Code to it:
+
+```bash
+claude mcp add --transport http marsad http://localhost:8811
+```
+
+Or over stdio, no HTTP port at all:
+
+```bash
+claude mcp add marsad -- go run ./cmd/marsad serve --config examples/quickstart/marsad.yaml
+```
+
+Then ask your agent something like "what metrics does this Prometheus have?" - it will call `list_metric_names` and `query_metrics` through Marsad, and every call lands in the audit log (stderr by default). Configuration is documented in [docs/configuration.md](docs/configuration.md).
+
 ## Status
 
-Early development. The first milestone (MCP server core, Prometheus connector, guardrails baseline) is specified in [`openspec/changes/`](openspec/changes/) and under active build.
+Early development. The first milestone - MCP server core with stdio and streamable HTTP transports, the Prometheus connector, and the guardrails baseline (read-only enforcement, query time-range caps, per-call audit log, outbound allowlist) - is implemented; see [`openspec/changes/`](openspec/changes/) for the spec.
 
 ## Planned v1 connectors
 

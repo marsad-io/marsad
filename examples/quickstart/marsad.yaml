@@ -1,0 +1,10 @@
+connectors:
+  - name: local-prometheus
+    type: prometheus
+    url: http://localhost:9090
+
+guardrails:
+  max_time_range: 24h
+
+audit:
+  sink: stderr

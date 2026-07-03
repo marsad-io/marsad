@@ -1,0 +1,7 @@
+# Quickstart backend: a local Prometheus that scrapes itself, so query_metrics
+# has real data. Marsad itself runs on your host via `go run` - see README.
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - "9090:9090"
