@@ -202,3 +202,113 @@ func TestCapabilitiesDeclareLogTools(t *testing.T) {
 		t.Errorf("Type() = %q, want loki", c.Type())
 	}
 }
+
+func fakeLokiLabels(t *testing.T) (*httptest.Server, *[]*url.URL) {
+	t.Helper()
+	var requests []*url.URL
+	mux := http.NewServeMux()
+	mux.HandleFunc("/loki/api/v1/labels", func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL)
+		w.Write([]byte(`{"status":"success","data":["app","level","namespace"]}`))
+	})
+	mux.HandleFunc("/loki/api/v1/label/app/values", func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL)
+		w.Write([]byte(`{"status":"success","data":["api","worker"]}`))
+	})
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL)
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv, &requests
+}
+
+func TestListLogLabelsMapsToLabelsEndpoint(t *testing.T) {
+	srv, requests := fakeLokiLabels(t)
+	c := newTestConnector(t, srv.URL)
+
+	res, err := c.Execute(context.Background(), connector.ToolCall{Tool: "list_log_labels"})
+	if err != nil {
+		t.Fatalf("Execute = %v", err)
+	}
+
+	if len(*requests) != 1 || (*requests)[0].Path != "/loki/api/v1/labels" {
+		t.Fatalf("requests = %v, want one /loki/api/v1/labels call", *requests)
+	}
+	b, _ := json.Marshal(res.Content)
+	for _, want := range []string{`"labels"`, `"app"`, `"namespace"`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("result %s missing %s", b, want)
+		}
+	}
+}
+
+func TestListLogLabelValuesMapsToLabelValuesEndpoint(t *testing.T) {
+	srv, requests := fakeLokiLabels(t)
+	c := newTestConnector(t, srv.URL)
+
+	res, err := c.Execute(context.Background(), connector.ToolCall{
+		Tool: "list_log_labels",
+		Args: map[string]any{"label": "app", "start": "1751530000", "end": "1751540000"},
+	})
+	if err != nil {
+		t.Fatalf("Execute = %v", err)
+	}
+
+	if len(*requests) != 1 || (*requests)[0].Path != "/loki/api/v1/label/app/values" {
+		t.Fatalf("requests = %v, want one /loki/api/v1/label/app/values call", *requests)
+	}
+	q := (*requests)[0].Query()
+	if q.Get("start") != "1751530000000000000" || q.Get("end") != "1751540000000000000" {
+		t.Errorf("window params = start %q end %q, want nanosecond epochs", q.Get("start"), q.Get("end"))
+	}
+	b, _ := json.Marshal(res.Content)
+	for _, want := range []string{`"label":"app"`, `"worker"`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("result %s missing %s", b, want)
+		}
+	}
+}
+
+func TestHealthMapsToReadyEndpoint(t *testing.T) {
+	srv, requests := fakeLokiLabels(t)
+	c := newTestConnector(t, srv.URL)
+
+	if err := c.Health(context.Background()); err != nil {
+		t.Fatalf("Health = %v", err)
+	}
+	if len(*requests) != 1 || (*requests)[0].Path != "/ready" {
+		t.Errorf("requests = %v, want /ready", *requests)
+	}
+}
+
+func TestHealthReportsUnreachableBackend(t *testing.T) {
+	c := newTestConnector(t, "http://127.0.0.1:1")
+
+	err := c.Health(context.Background())
+	if err == nil {
+		t.Fatal("Health(unreachable) = nil error")
+	}
+	if !strings.Contains(err.Error(), "loki-test") {
+		t.Errorf("error %q does not name the connector", err)
+	}
+}
+
+func TestHealthReportsNotReady(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	c := newTestConnector(t, srv.URL)
+
+	err := c.Health(context.Background())
+	if err == nil {
+		t.Fatal("Health(503) = nil error")
+	}
+	if !strings.Contains(err.Error(), "503") {
+		t.Errorf("error %q does not carry the status code", err)
+	}
+}

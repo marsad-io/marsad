@@ -72,14 +72,69 @@ func (c *Connector) Capabilities() []schema.ToolSpec {
 	return specs
 }
 
+// Health checks the readiness endpoint.
+func (c *Connector) Health(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/ready", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.do(req)
+	if err != nil {
+		return fmt.Errorf("loki %q unreachable: %w", c.name, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("loki %q not ready: HTTP %d", c.name, resp.StatusCode)
+	}
+	return nil
+}
+
 // Execute maps unified tool calls to the Loki HTTP API.
 func (c *Connector) Execute(ctx context.Context, call connector.ToolCall) (connector.ToolResult, error) {
 	switch call.Tool {
 	case "search_logs":
 		return c.searchLogs(ctx, call.Args)
+	case "list_log_labels":
+		return c.listLogLabels(ctx, call.Args)
 	default:
 		return connector.ToolResult{}, fmt.Errorf("loki connector does not serve tool %q", call.Tool)
 	}
+}
+
+// listLogLabels returns label names, or the values of one label when the
+// label argument is set. An optional start/end window scopes the answer.
+func (c *Connector) listLogLabels(ctx context.Context, args map[string]any) (connector.ToolResult, error) {
+	params := url.Values{}
+	for _, key := range []string{"start", "end"} {
+		raw, _ := args[key].(string)
+		if raw == "" {
+			continue
+		}
+		ns, err := toNanos(raw)
+		if err != nil {
+			return connector.ToolResult{}, fmt.Errorf("invalid %s: %w", key, err)
+		}
+		params.Set(key, ns)
+	}
+
+	label, _ := args["label"].(string)
+	endpoint := "/loki/api/v1/labels"
+	if label != "" {
+		endpoint = "/loki/api/v1/label/" + url.PathEscape(label) + "/values"
+	}
+
+	var values []string
+	if err := c.getJSON(ctx, endpoint, params, &values); err != nil {
+		return connector.ToolResult{}, err
+	}
+	if values == nil {
+		values = []string{}
+	}
+
+	if label != "" {
+		return connector.ToolResult{Content: map[string]any{"label": label, "values": values}}, nil
+	}
+	return connector.ToolResult{Content: map[string]any{"labels": values}}, nil
 }
 
 // entry is the backend-agnostic log entry shape shared by all log connectors.
