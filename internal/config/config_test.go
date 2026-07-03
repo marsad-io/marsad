@@ -262,3 +262,65 @@ func TestMaxResultBytesEnvOverrideRejectsGarbage(t *testing.T) {
 		t.Errorf("error %q does not name the env var", err)
 	}
 }
+
+func TestLokiBasicAuthComesFromEnvReferences(t *testing.T) {
+	path := writeFile(t, `
+connectors:
+  - name: logs
+    type: loki
+    url: http://localhost:3100
+    basic_auth_user_env: LOKI_USER
+    basic_auth_password_env: LOKI_PASSWORD
+`)
+	getenv := func(key string) string {
+		switch key {
+		case "LOKI_USER":
+			return "reader"
+		case "LOKI_PASSWORD":
+			return "s3cret"
+		}
+		return ""
+	}
+
+	cfg, err := Load(path, getenv)
+	if err != nil {
+		t.Fatalf("Load = %v", err)
+	}
+	c := cfg.Connectors[0]
+	if c.Type != "loki" {
+		t.Errorf("Type = %q, want loki", c.Type)
+	}
+	if c.BasicAuthUser != "reader" || c.BasicAuthPassword != "s3cret" {
+		t.Errorf("basic auth = %q/%q, want values resolved from env references", c.BasicAuthUser, c.BasicAuthPassword)
+	}
+}
+
+func TestLokiInlineSecretRejected(t *testing.T) {
+	path := writeFile(t, `
+connectors:
+  - name: logs
+    type: loki
+    url: http://localhost:3100
+    password: hunter2
+`)
+	_, err := Load(path, noEnv)
+	if err == nil {
+		t.Fatal("Load(loki inline password) = nil error")
+	}
+	if !strings.Contains(err.Error(), "environment variable") {
+		t.Errorf("error %q does not instruct operator to use an env reference", err)
+	}
+}
+
+func TestLokiInlineBasicAuthFieldRejected(t *testing.T) {
+	path := writeFile(t, `
+connectors:
+  - name: logs
+    type: loki
+    url: http://localhost:3100
+    basic_auth_password: hunter2
+`)
+	if _, err := Load(path, noEnv); err == nil {
+		t.Fatal("Load(inline basic_auth_password) = nil error, strict decoding must reject it")
+	}
+}

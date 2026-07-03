@@ -31,6 +31,8 @@ List of backends the gateway talks to. Marsad makes no network connection to any
 | `type` | yes | Backend type. Currently `prometheus` (Thanos and Mimir compatible). |
 | `url` | yes | Base URL of the backend. |
 | `bearer_token_env` | no | Name of an environment variable holding a bearer token for the backend. |
+| `basic_auth_user_env` | no | Name of an environment variable holding the basic auth username. Use together with `basic_auth_password_env`; mutually exclusive with `bearer_token_env`. |
+| `basic_auth_password_env` | no | Name of an environment variable holding the basic auth password. |
 
 Credentials are never written inline. A field like `password:` or `token:` in the file fails validation with instructions to use an env reference instead.
 

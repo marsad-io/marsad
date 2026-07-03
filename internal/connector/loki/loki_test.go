@@ -312,3 +312,62 @@ func TestHealthReportsNotReady(t *testing.T) {
 		t.Errorf("error %q does not carry the status code", err)
 	}
 }
+
+func authCapturingLoki(t *testing.T) (*httptest.Server, *[]string) {
+	t.Helper()
+	var headers []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/loki/api/v1/labels", func(w http.ResponseWriter, r *http.Request) {
+		headers = append(headers, r.Header.Get("Authorization"))
+		w.Write([]byte(`{"status":"success","data":["app"]}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv, &headers
+}
+
+func TestBearerTokenSentAsAuthorizationHeader(t *testing.T) {
+	srv, headers := authCapturingLoki(t)
+	c, err := New("loki-auth", srv.URL, Auth{BearerToken: "tok-123"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.Execute(context.Background(), connector.ToolCall{Tool: "list_log_labels"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(*headers) != 1 || (*headers)[0] != "Bearer tok-123" {
+		t.Errorf("Authorization headers = %v, want Bearer tok-123", *headers)
+	}
+}
+
+func TestBasicAuthSentAsAuthorizationHeader(t *testing.T) {
+	srv, headers := authCapturingLoki(t)
+	c, err := New("loki-auth", srv.URL, Auth{BasicUser: "reader", BasicPassword: "s3cret"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.Execute(context.Background(), connector.ToolCall{Tool: "list_log_labels"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(*headers) != 1 || !strings.HasPrefix((*headers)[0], "Basic ") {
+		t.Fatalf("Authorization headers = %v, want Basic credentials", *headers)
+	}
+	req, _ := http.NewRequest(http.MethodGet, srv.URL, nil)
+	req.SetBasicAuth("reader", "s3cret")
+	if (*headers)[0] != req.Header.Get("Authorization") {
+		t.Errorf("Authorization = %q, want the reader:s3cret basic header", (*headers)[0])
+	}
+}
+
+func TestBearerAndBasicAuthAreMutuallyExclusive(t *testing.T) {
+	_, err := New("loki-auth", "http://localhost:3100",
+		Auth{BearerToken: "tok", BasicUser: "reader", BasicPassword: "pw"}, nil)
+	if err == nil {
+		t.Fatal("New(bearer + basic) = nil error")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("error %q does not explain the conflict", err)
+	}
+}

@@ -30,10 +30,12 @@ type Config struct {
 // ConnectorConfig describes one backend connection. Credentials are resolved
 // from environment variable references at load time and never stored in YAML.
 type ConnectorConfig struct {
-	Name        string
-	Type        string
-	URL         string
-	BearerToken string
+	Name              string
+	Type              string
+	URL               string
+	BearerToken       string
+	BasicAuthUser     string
+	BasicAuthPassword string
 }
 
 // GuardrailsConfig holds gateway-wide guardrail settings.
@@ -57,10 +59,12 @@ type yamlConfig struct {
 }
 
 type yamlConnector struct {
-	Name           string `yaml:"name"`
-	Type           string `yaml:"type"`
-	URL            string `yaml:"url"`
-	BearerTokenEnv string `yaml:"bearer_token_env"`
+	Name                 string `yaml:"name"`
+	Type                 string `yaml:"type"`
+	URL                  string `yaml:"url"`
+	BearerTokenEnv       string `yaml:"bearer_token_env"`
+	BasicAuthUserEnv     string `yaml:"basic_auth_user_env"`
+	BasicAuthPasswordEnv string `yaml:"basic_auth_password_env"`
 }
 
 type yamlGuardrails struct {
@@ -128,6 +132,12 @@ func Load(path string, getenv func(string) string) (Config, error) {
 		cc := ConnectorConfig{Name: c.Name, Type: c.Type, URL: c.URL}
 		if c.BearerTokenEnv != "" {
 			cc.BearerToken = getenv(c.BearerTokenEnv)
+		}
+		if c.BasicAuthUserEnv != "" {
+			cc.BasicAuthUser = getenv(c.BasicAuthUserEnv)
+		}
+		if c.BasicAuthPasswordEnv != "" {
+			cc.BasicAuthPassword = getenv(c.BasicAuthPasswordEnv)
 		}
 		cfg.Connectors = append(cfg.Connectors, cc)
 	}
